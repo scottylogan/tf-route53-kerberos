@@ -1,12 +1,23 @@
 data "aws_availability_zones" "azs" {}
 
 data "aws_route53_zone" "krb5" {
-  zone_id = "${var.zone_id}"
+  name = "${var.domain}."
 }
 
-variable "zone_id" {
+data "aws_route53_zone" "target" {
+  name = "${var.target_domain == "" ? var.domain : var.target_domain}."
+}
+
+variable "domain" {
   type = "string"
-  description = "AWS Route53 ZoneID"
+  description = "Domain to host DNS records"
+  default = ""
+}
+
+variable "target_domain" {
+  type = "string"
+  description = "Domain for DNS SRV record targets"
+  default = ""
 }
 
 variable "prefix" {
@@ -50,51 +61,58 @@ variable "kadmin" {
 }
 
 resource "aws_route53_record" "krb5-txt" {
-  zone_id = "${var.zone_id}"
+  zone_id = "${data.aws_route53_zone.krb5.zone_id}"
 #  name    = "_kerberos.${var.domain}"
-  name    = "_kerberos.${data.aws_route53_zone.krb5.name}"
+  name    = "_kerberos.${var.domain}"
   type    = "TXT"
   ttl     = "${var.ttl}"
   
   records = [
-    "${var.realm == "" ? upper(data.aws_route53_zone.krb5.name) : var.realm}"
+    "${var.realm == "" ? upper(var.domain) : var.realm}"
   ]
+}
+
+data "template_file" "target_name" {
+  template = "$${t_name}"
+  vars {
+    t_name = "${var.target_domain == "" ? var.domain : var.target_domain}."
+  }
 }
 
 data "template_file" "kdc_records" {
   count = "${var.kdcs == "0" ? length(data.aws_availability_zones.azs.names) : var.kdcs}"
   template = "0 0 88 $${kdc_name}"
   vars {
-    kdc_name = "${format("%s-%d.%s", var.prefix, count.index + 1, data.aws_route53_zone.krb5.name)}"
+    kdc_name = "${format("%s-%d.%s", var.prefix, count.index + 1, data.template_file.target_name.rendered)}"
   }
 }
 
 data "template_file" "master_name" {
   template = "$${kdc_name}"
   vars {
-    kdc_name = "${format("%s.%s", var.master_name == "" ? format("%s-1", var.prefix) : var.master_name, data.aws_route53_zone.krb5.name)}"
+    kdc_name = "${format("%s.%s", var.master_name == "" ? format("%s-1", var.prefix) : var.master_name, data.template_file.target_name.rendered)}"
   }
 }
 
 resource "aws_route53_record" "krb5-tcpsrv" {
-  zone_id = "${var.zone_id}"
-  name    = "_kerberos._tcp.${data.aws_route53_zone.krb5.name}"
+  zone_id = "${data.aws_route53_zone.krb5.zone_id}"
+  name    = "_kerberos._tcp.${var.domain}"
   type    = "SRV"
   ttl     = "${var.ttl}"
   records = ["${data.template_file.kdc_records.*.rendered}"]
 }
 
 resource "aws_route53_record" "krb5-udpsrv" {
-  zone_id = "${var.zone_id}"
-  name    = "_kerberos._udp.${data.aws_route53_zone.krb5.name}"
+  zone_id = "${data.aws_route53_zone.krb5.zone_id}"
+  name    = "_kerberos._udp.${var.domain}"
   type    = "SRV"
   ttl     = "${var.ttl}"
   records = ["${data.template_file.kdc_records.*.rendered}"]
 }
 
 resource "aws_route53_record" "krb5-master-udpsrv" {
-  zone_id = "${var.zone_id}"
-  name    = "_kerberos-master._udp.${data.aws_route53_zone.krb5.name}"
+  zone_id = "${data.aws_route53_zone.krb5.zone_id}"
+  name    = "_kerberos-master._udp.${var.domain}"
   type    = "SRV"
   ttl     = "${var.ttl}"
   
@@ -105,8 +123,8 @@ resource "aws_route53_record" "krb5-master-udpsrv" {
 
 resource "aws_route53_record" "krb5-adm-tcpsrv" {
   count   = "${var.kadmin ? 1 : 0}"
-  zone_id = "${var.zone_id}"
-  name    = "_kerberos-adm._tcp.${data.aws_route53_zone.krb5.name}"
+  zone_id = "${data.aws_route53_zone.krb5.zone_id}"
+  name    = "_kerberos-adm._tcp.${var.domain}"
   type    = "SRV"
   ttl     = "${var.ttl}"
   
@@ -117,8 +135,8 @@ resource "aws_route53_record" "krb5-adm-tcpsrv" {
 
 resource "aws_route53_record" "krb5-kpasswd-udpsrv" {
   count   = "${var.kpasswd ? 1 : 0}"
-  zone_id = "${var.zone_id}"
-  name    = "_kpasswd._udp.${data.aws_route53_zone.krb5.name}"
+  zone_id = "${data.aws_route53_zone.krb5.zone_id}"
+  name    = "_kpasswd._udp.${var.domain}"
   type    = "SRV"
   ttl     = "${var.ttl}"
   
