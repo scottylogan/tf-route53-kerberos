@@ -26,12 +26,6 @@ variable "prefix" {
   default = "kdc"
 }
 
-variable "master_name" {
-  type = "string"
-  description = "master KDC name"
-  default = ""
-}
-
 variable "realm" {
   type = "string"
   description = "Kerberos realm name"
@@ -81,16 +75,17 @@ data "template_file" "target_name" {
 
 data "template_file" "kdc_records" {
   count = "${var.kdcs == "0" ? length(data.aws_availability_zones.azs.names) : var.kdcs}"
-  template = "0 0 88 $${kdc_name}"
+  template = "$${priority} 0 88 $${kdc_name}"
   vars {
-    kdc_name = "${format("%s-%d.%s", var.prefix, count.index + 1, data.template_file.target_name.rendered)}"
+    kdc_name = "${format("%s-%d.%s", var.prefix, count.index, data.template_file.target_name.rendered)}"
+    priority = "${count.index == 0 ? 10 : 0}"
   }
 }
 
 data "template_file" "master_name" {
   template = "$${kdc_name}"
   vars {
-    kdc_name = "${format("%s.%s", var.master_name == "" ? format("%s-1", var.prefix) : var.master_name, data.template_file.target_name.rendered)}"
+    kdc_name = "${format("%s-0.%s", var.prefix, data.template_file.target_name.rendered)}"
   }
 }
 
