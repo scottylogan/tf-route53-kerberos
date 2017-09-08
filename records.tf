@@ -116,6 +116,18 @@ resource "aws_route53_record" "krb5-master-udpsrv" {
   ]
 }
 
+resource "aws_route53_record" "krb5-master-alias" {
+  zone_id = "${data.aws_route53_zone.target.zone_id}"
+  name    = "${format("%s-master.%s", var.prefix, data.template_file.target_name.rendered)}"
+  type    = "A"
+
+  alias {
+    name                   = "${data.template_file.master_name.rendered}"
+    zone_id                = "${data.aws_route53_zone.target.zone_id}"
+    evaluate_target_health = false
+  }
+}
+
 resource "aws_route53_record" "krb5-adm-tcpsrv" {
   count   = "${var.kadmin ? 1 : 0}"
   zone_id = "${data.aws_route53_zone.krb5.zone_id}"
