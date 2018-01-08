@@ -8,6 +8,24 @@ data "aws_route53_zone" "target" {
   name = "${var.target_domain == "" ? var.domain : var.target_domain}."
 }
 
+variable "kdc_port" {
+  type = "string"
+  description = "kdc listener port"
+  default = "88"
+}
+
+variable "kadmin_port" {
+  type = "string"
+  description = "kadmind listener port"
+  default = "749"
+}
+
+variable "kpasswd_port" {
+  type = "string"
+  description = "kpasswdd listener port"
+  default = "464"
+}
+
 variable "domain" {
   type = "string"
   description = "Domain to host DNS records"
@@ -75,7 +93,7 @@ data "template_file" "target_name" {
 
 data "template_file" "kdc_records" {
   count = "${var.kdcs == "0" ? length(data.aws_availability_zones.azs.names) : var.kdcs}"
-  template = "$${priority} 0 88 $${kdc_name}"
+  template = "$${priority} 0 ${var.kdc_port} $${kdc_name}"
   vars {
     kdc_name = "${format("%s-%d.%s", var.prefix, count.index, data.template_file.target_name.rendered)}"
     priority = "${count.index == 0 ? 10 : 0}"
@@ -112,7 +130,7 @@ resource "aws_route53_record" "krb5-master-udpsrv" {
   ttl     = "${var.ttl}"
   
   records = [
-    "0 0 88 ${data.template_file.master_name.rendered}"
+    "0 0 ${var.kdc_port} ${data.template_file.master_name.rendered}"
   ]
 }
 
@@ -136,7 +154,7 @@ resource "aws_route53_record" "krb5-adm-tcpsrv" {
   ttl     = "${var.ttl}"
   
   records = [
-    "0 0 749 ${data.template_file.master_name.rendered}"
+    "0 0 ${var.kadmin_port} ${data.template_file.master_name.rendered}"
   ]
 }
 
@@ -148,6 +166,6 @@ resource "aws_route53_record" "krb5-kpasswd-udpsrv" {
   ttl     = "${var.ttl}"
   
   records = [
-    "0 0 464 ${data.template_file.master_name.rendered}"
+    "0 0 ${var.kpasswd_port} ${data.template_file.master_name.rendered}"
   ]
 }

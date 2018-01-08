@@ -56,13 +56,26 @@ Defines the DNS record TTL (in seconds). Defaults to _300_.
 Number of KDC targets to create for the SRV records. Defaults to the
 number of availability zones in the current AWS region.
 
+### kdc_port
+
+Defines the port for the `_kerberos._udp` and `_kerberos._tcp` SRV
+records. Defaults to 88.
+
 ### kpasswd
 
 Controls the creation of the `_kpasswd._udp` SRV record. Defaults to _true_.
 
+### kpasswd_port
+
+Defines the port for the `_kpasswd._udp` SRV record. Defaults to 464
+
 ### kadmin
 
 Controls the creation of the `_kerberos-adm._tcp` SRV record. Defaults to _true_.
+
+### kadmin_port
+
+Defines the port for the `_kerberos-adm._tcp` SRV record. Defaults to 749
 
 
 ## Configuration Example
