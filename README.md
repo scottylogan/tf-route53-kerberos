@@ -3,12 +3,20 @@ Simple Terraform module to create DNS records for Kerberos
 
 ## Usage
 
-Minimum configuration:
+Minimum configuration (using code.stanford.edu):
+
+    module "example_krb5" {
+      source = "git://code.stanford.edu/tf_modules/route53_kr5.git"
+      zone_id = "${aws_route53_zone.example.zone_id}"
+    }
+
+Minimum configuration (using GitHub):
 
     module "example_krb5" {
       source  = "github.com/scottylogan/tf_aws_r53_krb5"
       zone_id = "${aws_route53_zone.example.zone_id}"
     }
+
 
 This would create records in the _example.com_ domain for the _EXAMPLE.COM_ Kerberos realm:
 
