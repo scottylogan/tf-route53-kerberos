@@ -2,23 +2,10 @@ data "aws_availability_zones" "azs" {}
 
 data "aws_route53_zone" "krb5" {
   name = "${var.domain}."
-  vpc_id = "${var.vpc_id}"
 }
 
 data "aws_route53_zone" "target" {
   name = "${var.target_domain == "" ? var.domain : var.target_domain}."
-  vpc_id = "${var.target_vpc_id == "" ? var.vpc_id : var.target_vpc_id}"
-}
-
-variable "vpc_id" {
-  type = "string"
-  description = "VPC Id for Route53 Zone"
-}
-
-variable "target_vpc_id" {
-  type = "string"
-  description = "VPC Id for Route53 Target Zone"
-  default = ""
 }
 
 variable "kdc_port" {
