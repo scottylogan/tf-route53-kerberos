@@ -1,4 +1,5 @@
-data "aws_availability_zones" "azs" {}
+data "aws_availability_zones" "azs" {
+}
 
 data "aws_route53_zone" "krb5" {
   name = "${var.domain}."
@@ -9,163 +10,177 @@ data "aws_route53_zone" "target" {
 }
 
 variable "kdc_port" {
-  type = "string"
+  type        = string
   description = "kdc listener port"
-  default = "88"
+  default     = "88"
 }
 
 variable "kadmin_port" {
-  type = "string"
+  type        = string
   description = "kadmind listener port"
-  default = "749"
+  default     = "749"
 }
 
 variable "kpasswd_port" {
-  type = "string"
+  type        = string
   description = "kpasswdd listener port"
-  default = "464"
+  default     = "464"
 }
 
 variable "domain" {
-  type = "string"
+  type        = string
   description = "Domain to host DNS records"
-  default = ""
+  default     = ""
 }
 
 variable "target_domain" {
-  type = "string"
+  type        = string
   description = "Domain for DNS SRV record targets"
-  default = ""
+  default     = ""
 }
 
 variable "prefix" {
-  type = "string"
+  type        = string
   description = "Name prefix for KDC targets in SRV records"
-  default = "kdc"
+  default     = "kdc"
 }
 
 variable "realm" {
-  type = "string"
+  type        = string
   description = "Kerberos realm name"
-  default = ""
+  default     = ""
 }
 
 variable "ttl" {
-  type = "string"
-  default = "300"
+  type        = string
+  default     = "300"
   description = "DNS Record TTL"
 }
 
 variable "kdcs" {
-  type = "string"
-  default = "0"
+  type        = string
+  default     = "0"
   description = "Number of KDC targets to create for SRV records"
 }
 
 variable "kpasswd" {
-  default = true
+  default     = true
   description = "Control the creation of the _kpasswd._udp SRV record"
 }
 
 variable "kadmin" {
-  default = true
+  default     = true
   description = "Control the creation of the _kerberos-adm._tcp SRV record"
 }
 
 resource "aws_route53_record" "krb5-txt" {
-  zone_id = "${data.aws_route53_zone.krb5.zone_id}"
-#  name    = "_kerberos.${var.domain}"
-  name    = "_kerberos.${var.domain}"
-  type    = "TXT"
-  ttl     = "${var.ttl}"
-  
+  zone_id = data.aws_route53_zone.krb5.zone_id
+
+  #  name    = "_kerberos.${var.domain}"
+  name = "_kerberos.${var.domain}"
+  type = "TXT"
+  ttl  = var.ttl
+
   records = [
-    "${var.realm == "" ? upper(var.domain) : var.realm}"
+    var.realm == "" ? upper(var.domain) : var.realm,
   ]
 }
 
 data "template_file" "target_name" {
   template = "$${t_name}"
-  vars {
+  vars = {
     t_name = "${var.target_domain == "" ? var.domain : var.target_domain}."
   }
 }
 
 data "template_file" "kdc_records" {
-  count = "${var.kdcs == "0" ? length(data.aws_availability_zones.azs.names) : var.kdcs}"
+  count    = var.kdcs == "0" ? length(data.aws_availability_zones.azs.names) : var.kdcs
   template = "$${priority} 0 ${var.kdc_port} $${kdc_name}"
-  vars {
-    kdc_name = "${format("%s-%d.%s", var.prefix, count.index, data.template_file.target_name.rendered)}"
-    priority = "${count.index == 0 ? 10 : 0}"
+  vars = {
+    kdc_name = format(
+      "%s-%d.%s",
+      var.prefix,
+      count.index,
+      data.template_file.target_name.rendered,
+    )
+    priority = count.index == 0 ? 10 : 0
   }
 }
 
 data "template_file" "master_name" {
   template = "$${kdc_name}"
-  vars {
-    kdc_name = "${format("%s-0.%s", var.prefix, data.template_file.target_name.rendered)}"
+  vars = {
+    kdc_name = format(
+      "%s-0.%s",
+      var.prefix,
+      data.template_file.target_name.rendered,
+    )
   }
 }
 
 resource "aws_route53_record" "krb5-tcpsrv" {
-  zone_id = "${data.aws_route53_zone.krb5.zone_id}"
+  zone_id = data.aws_route53_zone.krb5.zone_id
   name    = "_kerberos._tcp.${var.domain}"
   type    = "SRV"
-  ttl     = "${var.ttl}"
-  records = ["${data.template_file.kdc_records.*.rendered}"]
+  ttl     = var.ttl
+  records = data.template_file.kdc_records.*.rendered
 }
 
 resource "aws_route53_record" "krb5-udpsrv" {
-  zone_id = "${data.aws_route53_zone.krb5.zone_id}"
+  zone_id = data.aws_route53_zone.krb5.zone_id
   name    = "_kerberos._udp.${var.domain}"
   type    = "SRV"
-  ttl     = "${var.ttl}"
-  records = ["${data.template_file.kdc_records.*.rendered}"]
+  ttl     = var.ttl
+  records = data.template_file.kdc_records.*.rendered
 }
 
 resource "aws_route53_record" "krb5-master-udpsrv" {
-  zone_id = "${data.aws_route53_zone.krb5.zone_id}"
+  zone_id = data.aws_route53_zone.krb5.zone_id
   name    = "_kerberos-master._udp.${var.domain}"
   type    = "SRV"
-  ttl     = "${var.ttl}"
-  
+  ttl     = var.ttl
+
   records = [
-    "0 0 ${var.kdc_port} ${data.template_file.master_name.rendered}"
+    "0 0 ${var.kdc_port} ${data.template_file.master_name.rendered}",
   ]
 }
 
 resource "aws_route53_record" "krb5-master-alias" {
-  zone_id = "${data.aws_route53_zone.target.zone_id}"
-  name    = "${format("%s-master.%s", var.prefix, data.template_file.target_name.rendered)}"
-  type    = "A"
+  zone_id = data.aws_route53_zone.target.zone_id
+  name = format(
+    "%s-master.%s",
+    var.prefix,
+    data.template_file.target_name.rendered,
+  )
+  type = "A"
 
   alias {
-    name                   = "${data.template_file.master_name.rendered}"
-    zone_id                = "${data.aws_route53_zone.target.zone_id}"
+    name                   = data.template_file.master_name.rendered
+    zone_id                = data.aws_route53_zone.target.zone_id
     evaluate_target_health = false
   }
 }
 
 resource "aws_route53_record" "krb5-adm-tcpsrv" {
-  count   = "${var.kadmin ? 1 : 0}"
-  zone_id = "${data.aws_route53_zone.krb5.zone_id}"
+  count   = var.kadmin ? 1 : 0
+  zone_id = data.aws_route53_zone.krb5.zone_id
   name    = "_kerberos-adm._tcp.${var.domain}"
   type    = "SRV"
-  ttl     = "${var.ttl}"
-  
+  ttl     = var.ttl
+
   records = [
-    "0 0 ${var.kadmin_port} ${data.template_file.master_name.rendered}"
+    "0 0 ${var.kadmin_port} ${data.template_file.master_name.rendered}",
   ]
 }
 
 resource "aws_route53_record" "krb5-kpasswd-udpsrv" {
-  count   = "${var.kpasswd ? 1 : 0}"
-  zone_id = "${data.aws_route53_zone.krb5.zone_id}"
+  count   = var.kpasswd ? 1 : 0
+  zone_id = data.aws_route53_zone.krb5.zone_id
   name    = "_kpasswd._udp.${var.domain}"
   type    = "SRV"
-  ttl     = "${var.ttl}"
-  
+  ttl     = var.ttl
+
   records = [
-    "0 0 ${var.kpasswd_port} ${data.template_file.master_name.rendered}"
+    "0 0 ${var.kpasswd_port} ${data.template_file.master_name.rendered}",
   ]
 }
